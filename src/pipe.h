@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <span>
@@ -12,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace anno_pipe
 {
@@ -59,8 +61,25 @@ namespace anno_pipe
 
 	//////////////////////////////////////////////////////////////////////////
 
+	// Fired once per parsed AreaProductionStatistics message, after productionData/productionDataMutex
+	// have been updated for it. Lets a caller (e.g. the local statistics server) mirror the pipe
+	// stream without pipe.cpp knowing anything about HTTP/SSE.
+	using AreaStatisticsCallback = std::function<void(int sessionID, int islandID, int areaIndex, std::int32_t sessionGUID,
+		const std::string& areaName, std::int64_t timeStamp, const std::vector<ProductionEntryData>& entries)>;
+
+	// Fired on SessionEnd and on the pipe breaking/closing - anything that should end a live client's
+	// view of "connected".
+	using DisconnectCallback = std::function<void()>;
+
+	// Fired on SessionStart, i.e. a new game session beginning. Distinct from DisconnectCallback:
+	// unlike SessionEnd/broken-pipe, a SessionStart does not necessarily mean an existing live client
+	// should be dropped - it's for callers that need to reset session-scoped state (e.g. a cache) that
+	// SessionStart doesn't otherwise signal, since it isn't guaranteed to always follow a SessionEnd.
+	using SessionStartCallback = std::function<void()>;
+
 	void RunPipe(std::stop_token stop, std::string& headline, std::map<std::string, std::map<std::int32_t, std::deque<anno_pipe::ProductionEntryData>>>& productionData,
-		std::mutex& productionDataMutex);
+		std::mutex& productionDataMutex, AreaStatisticsCallback onAreaStatistics = {}, DisconnectCallback onDisconnect = {},
+		SessionStartCallback onSessionStart = {});
 
 }
 

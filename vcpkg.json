@@ -1,0 +1,11 @@
+{
+  "name": "anno117-pipe",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "name": "cpp-httplib",
+      "default-features": false
+    },
+    "nlohmann-json"
+  ]
+}

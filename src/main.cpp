@@ -1,3 +1,7 @@
+// cpp-httplib (pulled in transitively via statistics_server.h) needs <winsock2.h>, which conflicts
+// with the legacy <winsock.h> that <Windows.h> pulls in by default - WIN32_LEAN_AND_MEAN keeps
+// Windows.h from doing that.
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
 #include <algorithm>
@@ -6,16 +10,111 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iostream>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include "imgui_impl.h"
 
 #include "pipe.h"
+#include "statistics_server.h"
+
+namespace
+{
+
+	// The calculator is vendored as a git submodule at external/anno-117-calculator (see
+	// .gitmodules) - ANNO117_CALCULATOR_DIR is baked in by CMakeLists.txt as an absolute,
+	// source-tree-relative path, since this is a build-from-source example app rather than
+	// something installed away from its source. Override with --calculator-dir for any other layout.
+	std::filesystem::path DefaultCalculatorDir()
+	{
+		return ANNO117_CALCULATOR_DIR;
+	}
+
+	std::filesystem::path ResolveCalculatorDir(const int argc, char** const argv)
+	{
+		constexpr std::string_view flagWithEquals{ "--calculator-dir=" };
+		for (int i = 1; i < argc; ++i)
+		{
+			const std::string_view arg{ argv[i] };
+			if (arg.starts_with(flagWithEquals))
+			{
+				return std::filesystem::path(arg.substr(flagWithEquals.size()));
+			}
+			if (arg == "--calculator-dir" && i + 1 < argc)
+			{
+				return std::filesystem::path(argv[++i]);
+			}
+		}
+		return DefaultCalculatorDir();
+	}
+
+	// `--replay-file <path>`/`--replay-file=<path>` points at a JSONL file of statistics-feed
+	// payloads (one per line, schema matching anno_server::BuildStatisticsPayload's output - see
+	// docs/test-replay-data.jsonl for a fixture derived from docs/example_responses.txt). When set,
+	// each line is broadcast once at startup so the replay cache is primed and a client connecting
+	// to /statistics is caught up immediately, without needing the game running - see
+	// docs/plans/2026-08-11-001-feat-island-stats-replay-cache-plan.md.
+	std::optional<std::filesystem::path> ResolveReplayFile(const int argc, char** const argv)
+	{
+		constexpr std::string_view flagWithEquals{ "--replay-file=" };
+		for (int i = 1; i < argc; ++i)
+		{
+			const std::string_view arg{ argv[i] };
+			if (arg.starts_with(flagWithEquals))
+			{
+				return std::filesystem::path(arg.substr(flagWithEquals.size()));
+			}
+			if (arg == "--replay-file" && i + 1 < argc)
+			{
+				return std::filesystem::path(argv[++i]);
+			}
+		}
+		return std::nullopt;
+	}
+
+	void BroadcastReplayFile(const std::filesystem::path& path, anno_server::StatisticsServer& statisticsServer)
+	{
+		std::ifstream file{ path };
+		if (!file)
+		{
+			std::cout << "Could not open replay file " << path.string() << "\n";
+			return;
+		}
+
+		std::size_t broadcastCount{ 0 };
+		std::string line;
+		while (std::getline(file, line))
+		{
+			if (line.find_first_not_of(" \t\r\n") == std::string::npos)
+			{
+				continue;
+			}
+
+			try
+			{
+				const auto payload = nlohmann::json::parse(line);
+				statisticsServer.Broadcast(payload.at("islandId").get<int>(), payload.at("areaIndex").get<int>(), payload);
+				++broadcastCount;
+			}
+			catch (const nlohmann::json::exception& e)
+			{
+				std::cout << "Skipping malformed replay line: " << e.what() << "\n";
+			}
+		}
+
+		std::cout << "Loaded " << broadcastCount << " island(s) from replay file " << path.string() << "\n";
+	}
+
+}
 
 void DrawImGui(std::mutex& productionDataMutex, std::map<std::string, std::map<std::int32_t, std::deque<anno_pipe::ProductionEntryData>>>& productionData, const std::string& headline)
 {
@@ -49,7 +148,24 @@ void DrawImGui(std::mutex& productionDataMutex, std::map<std::string, std::map<s
 	ImGui::End();
 }
 
-int main()
+// Starts a new Dear ImGui frame and renders it - the per-frame counterpart to the one-time
+// SetupImgui() call. NewFrame()/Render() must run every frame regardless of what's drawn: the
+// main loop's ImGui_ImplDX12_RenderDrawData() call always runs unconditionally afterwards and
+// needs valid (if empty) draw data from Render(), or it crashes on GetDrawData(). Only the debug
+// window content (DrawImGui - Ubisoft's default raw-data window) is disabled, now that the
+// calculator/statistics.html pages are the primary UI.
+void RenderImGuiFrame([[maybe_unused]] std::mutex& productionDataMutex, [[maybe_unused]] std::map<std::string, std::map<std::int32_t, std::deque<anno_pipe::ProductionEntryData>>>& productionData, [[maybe_unused]] const std::string& headline)
+{
+	ImGui_ImplDX12_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+
+	// DrawImGui(productionDataMutex, productionData, headline);
+
+	ImGui::Render();
+}
+
+int main(int argc, char** argv)
 {
 	HWND hwnd;
 	WNDCLASSEXW wc;
@@ -58,11 +174,42 @@ int main()
 		return EXIT_FAILURE;
 	}
 
+	// SetupImgui() shows the window (Ubisoft's default behavior); hide it immediately since the
+	// calculator/statistics.html pages are the primary UI now. The window/D3D12 device/render loop
+	// stay alive regardless - they're still needed to keep the process running and for clean
+	// shutdown - they just never become visible.
+	::ShowWindow(hwnd, SW_HIDE);
+
 	std::mutex productionDataMutex;
 	std::map<std::string, std::map<std::int32_t, std::deque<anno_pipe::ProductionEntryData>>> productionData;
 	std::string headline;
 
-	std::jthread pipe_thread{ anno_pipe::RunPipe, std::ref(headline), std::ref(productionData), std::ref(productionDataMutex) };
+	const auto calculatorDir = ResolveCalculatorDir(argc, argv);
+	anno_server::StatisticsServer statisticsServer{ anno_server::DefaultHost, anno_server::DefaultPort, calculatorDir };
+	statisticsServer.Start();
+	std::cout << "Open http://" << anno_server::DefaultHost << ":" << anno_server::DefaultPort
+		<< "/statistics.html in a browser for the live statistics page.\n";
+
+	if (const auto replayFile = ResolveReplayFile(argc, argv))
+	{
+		BroadcastReplayFile(*replayFile, statisticsServer);
+	}
+
+	std::jthread pipe_thread{ anno_pipe::RunPipe, std::ref(headline), std::ref(productionData), std::ref(productionDataMutex),
+		[&statisticsServer](int sessionID, int islandID, int areaIndex, std::int32_t sessionGUID, const std::string& areaName,
+			std::int64_t timeStamp, const std::vector<anno_pipe::ProductionEntryData>& entries)
+		{
+			statisticsServer.Broadcast(islandID, areaIndex, anno_server::BuildStatisticsPayload(sessionID, islandID, areaIndex, sessionGUID, areaName, timeStamp, entries));
+		},
+		[&statisticsServer]
+		{
+			statisticsServer.DisconnectAll();
+			statisticsServer.ClearCache();
+		},
+		[&statisticsServer]
+		{
+			statisticsServer.ClearCache();
+		} };
 
 	bool done = false;
 	while (!done)
@@ -89,15 +236,7 @@ int main()
 		}
 		g_SwapChainOccluded = false;
 
-		// Start the Dear ImGui frame
-		ImGui_ImplDX12_NewFrame();
-		ImGui_ImplWin32_NewFrame();
-		ImGui::NewFrame();
-
-		DrawImGui(productionDataMutex, productionData, headline);
-
-		// Rendering
-		ImGui::Render();
+		RenderImGuiFrame(productionDataMutex, productionData, headline);
 
 		FrameContext* const frameCtx = WaitForNextFrameResources();
 		const UINT backBufferIdx = g_pSwapChain->GetCurrentBackBufferIndex();
@@ -139,6 +278,7 @@ int main()
 	}
 
 	pipe_thread.request_stop();
+	statisticsServer.Stop();
 
 	CleanupImgui(hwnd, wc);
 

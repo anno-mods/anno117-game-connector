@@ -1,0 +1,7 @@
+[submodule "external/vcpkg"]
+	path = external/vcpkg
+	url = https://github.com/microsoft/vcpkg.git
+[submodule "external/anno-117-calculator"]
+	path = external/anno-117-calculator
+	url = https://github.com/anno-mods/anno-117-calculator.git
+	branch = game-connector

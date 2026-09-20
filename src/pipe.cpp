@@ -130,9 +130,10 @@ void ProductionEntryData::read(std::size_t& pos, const std::span<const unsigned 
 //////////////////////////////////////////////////////////////////////////
 
 void RunPipe(std::stop_token stop, std::string& headline, std::map<std::string, std::map<std::int32_t, std::deque<anno_pipe::ProductionEntryData>>>& productionData,
-	std::mutex& productionDataMutex)
+	std::mutex& productionDataMutex, AreaStatisticsCallback onAreaStatistics, DisconnectCallback onDisconnect,
+	SessionStartCallback onSessionStart)
 {
-	auto ReadFromPipe = [&headline, &productionData, &productionDataMutex](HANDLE pipe, unsigned char* const data, const std::size_t numBytes, DWORD& readBytes)
+	auto ReadFromPipe = [&headline, &productionData, &productionDataMutex, &onDisconnect](HANDLE pipe, unsigned char* const data, const std::size_t numBytes, DWORD& readBytes)
 	{
 		if (ReadFile(pipe, data, static_cast<DWORD>(numBytes), &readBytes, nullptr) == 0)
 		{
@@ -141,9 +142,15 @@ void RunPipe(std::stop_token stop, std::string& headline, std::map<std::string, 
 			{
 				std::cout << "Pipe was closed.\n";
 
-				std::lock_guard lock{ productionDataMutex };
-				headline = "Session End";
-				productionData.clear();
+				{
+					std::lock_guard lock{ productionDataMutex };
+					headline = "Session End";
+					productionData.clear();
+				}
+				if (onDisconnect)
+				{
+					onDisconnect();
+				}
 				return false;
 			}
 			ErrorExit();
@@ -261,56 +268,95 @@ void RunPipe(std::stop_token stop, std::string& headline, std::map<std::string, 
 				continue;
 			}
 
-			std::lock_guard lock{ productionDataMutex };
+			bool sessionEnded = false;
+			bool sessionStarted = false;
+			bool haveAreaStatistics = false;
+			int sessionID = 0;
+			int islandID = 0;
+			int areaIndex = 0;
+			std::int32_t sessionGUID = 0;
+			std::string areaName;
+			std::int64_t timeStamp = 0;
+			std::vector<ProductionEntryData> entries;
 
-			const auto type = static_cast<Message>((*buffer)[pos++]);
+			{
+				std::lock_guard lock{ productionDataMutex };
 
-			if (type == Message::SessionEnd)
-			{
-				std::cout << "SessionEnd [" << readBytes << " bytes]\n";
-				headline = "Session End";
-				productionData.clear();
-			}
-			else if (type == Message::SessionStart)
-			{
-				std::cout << "SessionStart[" << readBytes << " bytes]\n";
-				headline = ReadString(pos, {buffer->data(), size});
-				productionData.clear();
-			}
-			else if (type == Message::AreaProductionStatistics)
-			{
-				std::cout << "AreaProductionStatistics[" << readBytes << " bytes]\n";
-				if (pos + 3 > size)
+				const auto type = static_cast<Message>((*buffer)[pos++]);
+
+				if (type == Message::SessionEnd)
 				{
-					continue;
+					std::cout << "SessionEnd [" << readBytes << " bytes]\n";
+					headline = "Session End";
+					productionData.clear();
+					sessionEnded = true;
 				}
-				const int sessionID = (*buffer)[pos++];
-				const int islandID = (*buffer)[pos++];
-				const int areaIndex = (*buffer)[pos++];
-
-				const auto sessionGUID = ReadInt32(pos, {buffer->data(), size});
-
-				const std::string areaName(ReadString(pos, {buffer->data(), size}));
-
-				const auto timeStamp = ReadInt64(pos, {buffer->data(), size});
-
-				const auto numEntries = ReadInt32(pos, {buffer->data(), size});
-
-				std::cout << "area [" << sessionID << "|" << islandID << "|" << areaIndex << "] session [" << sessionGUID << "] " << areaName << ": " << timeStamp << " with " << numEntries << " entries\n";
-
-				for (std::int32_t i = 0; i < numEntries; ++i)
+				else if (type == Message::SessionStart)
 				{
-					ProductionEntryData entry;
-					entry.read(pos, {buffer->data(), size});
-					auto& q = productionData[areaName][entry.ProductGuid];
-					q.push_back(entry);
-
-					constexpr std::size_t historyLength{ 20 };
-					if (q.size() > historyLength) 
+					std::cout << "SessionStart[" << readBytes << " bytes]\n";
+					headline = ReadString(pos, {buffer->data(), size});
+					productionData.clear();
+					sessionStarted = true;
+				}
+				else if (type == Message::AreaProductionStatistics)
+				{
+					std::cout << "AreaProductionStatistics[" << readBytes << " bytes]\n";
+					if (pos + 3 > size)
 					{
-						q.pop_front();
+						continue;
 					}
+					sessionID = (*buffer)[pos++];
+					islandID = (*buffer)[pos++];
+					areaIndex = (*buffer)[pos++];
+
+					sessionGUID = ReadInt32(pos, {buffer->data(), size});
+
+					areaName = std::string(ReadString(pos, {buffer->data(), size}));
+
+					timeStamp = ReadInt64(pos, {buffer->data(), size});
+
+					const auto numEntries = ReadInt32(pos, {buffer->data(), size});
+
+					std::cout << "area [" << sessionID << "|" << islandID << "|" << areaIndex << "] session [" << sessionGUID << "] " << areaName << ": " << timeStamp << " with " << numEntries << " entries\n";
+
+					if (onAreaStatistics && numEntries > 0)
+					{
+						entries.reserve(static_cast<std::size_t>(numEntries));
+					}
+
+					for (std::int32_t i = 0; i < numEntries; ++i)
+					{
+						ProductionEntryData entry;
+						entry.read(pos, {buffer->data(), size});
+						auto& q = productionData[areaName][entry.ProductGuid];
+						q.push_back(entry);
+
+						constexpr std::size_t historyLength{ 20 };
+						if (q.size() > historyLength)
+						{
+							q.pop_front();
+						}
+
+						if (onAreaStatistics)
+						{
+							entries.push_back(entry);
+						}
+					}
+					haveAreaStatistics = true;
 				}
+			}
+
+			if (sessionEnded && onDisconnect)
+			{
+				onDisconnect();
+			}
+			if (sessionStarted && onSessionStart)
+			{
+				onSessionStart();
+			}
+			if (haveAreaStatistics && onAreaStatistics)
+			{
+				onAreaStatistics(sessionID, islandID, areaIndex, sessionGUID, areaName, timeStamp, entries);
 			}
 		}
 

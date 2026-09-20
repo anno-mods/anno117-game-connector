@@ -70,3 +70,11 @@ Testing/
 
 # imgui config
 imgui.ini
+
+# Visual Studio / CMake presets (local, machine-specific)
+.vs/
+/out/
+CMakeUserPresets.json
+
+# Local-only archive of docs removed from the tracked tree (see docs/plans/ for why)
+/.local-archive/

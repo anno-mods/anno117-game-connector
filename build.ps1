@@ -1,1 +1,0 @@
-cl /W4 /std:c++20 /nologo /EHsc /O2 /Fe:anno117_pipe.exe src/*.cpp external/imgui/*.cpp external/imgui/backends/*.cpp -Iexternal/imgui

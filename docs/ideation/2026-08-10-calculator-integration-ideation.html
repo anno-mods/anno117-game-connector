@@ -1,0 +1,392 @@
+<title>Ideation: Live Game Data → Anno 117 Calculator</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --surface-2: #f2f0ec;
+    --border: #ddd8cf;
+    --text: #1f1c17;
+    --text-muted: #6b6459;
+    --accent: #8a5a2b;
+    --accent-text: #6e4620;
+    --accent-soft: #f1e4d3;
+    --warn: #a3431f;
+    --warn-soft: #f6e2d8;
+    --good: #3f6b3f;
+    --good-soft: #e3ece0;
+    --code-bg: #efece3;
+    --font-body: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17140f;
+      --surface: #1f1b15;
+      --surface-2: #262019;
+      --border: #3a3226;
+      --text: #ece6da;
+      --text-muted: #a89d89;
+      --accent: #d8a15e;
+      --accent-text: #e6b877;
+      --accent-soft: #3a2c1a;
+      --warn: #e08a5f;
+      --warn-soft: #3a2419;
+      --good: #8fbf8a;
+      --good-soft: #223022;
+      --code-bg: #241f18;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17140f; --surface: #1f1b15; --surface-2: #262019; --border: #3a3226;
+    --text: #ece6da; --text-muted: #a89d89; --accent: #d8a15e; --accent-text: #e6b877;
+    --accent-soft: #3a2c1a; --warn: #e08a5f; --warn-soft: #3a2419; --good: #8fbf8a;
+    --good-soft: #223022; --code-bg: #241f18;
+  }
+  :root[data-theme="light"] {
+    --bg: #faf9f7; --surface: #ffffff; --surface-2: #f2f0ec; --border: #ddd8cf;
+    --text: #1f1c17; --text-muted: #6b6459; --accent: #8a5a2b; --accent-text: #6e4620;
+    --accent-soft: #f1e4d3; --warn: #a3431f; --warn-soft: #f6e2d8; --good: #3f6b3f;
+    --good-soft: #e3ece0; --code-bg: #efece3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.55;
+    margin: 0;
+    padding: 2.5rem 1.25rem 5rem;
+  }
+  .page { max-width: 900px; margin-inline: auto; }
+  h1, h2, h3 { font-family: var(--font-body); font-weight: 700; line-height: 1.25; }
+  h1 { font-size: 1.9rem; margin: 0 0 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.8rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+  h3 { font-size: 1.1rem; margin: 0 0 0.5rem; }
+  p { max-width: 72ch; }
+  code { font-family: var(--font-mono); background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
+  a { color: var(--accent-text); }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; color: var(--text-muted); font-weight: 600; }
+  .meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.6rem 0 1.4rem; font-size: 0.92rem; color: var(--text-muted); }
+  .meta span b { color: var(--text); font-weight: 600; }
+  .lede { color: var(--text-muted); max-width: 72ch; }
+  .stats-strip { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.4rem 0 0.5rem; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 1rem; min-width: 110px; }
+  .stat .n { font-size: 1.4rem; font-weight: 700; color: var(--accent-text); }
+  .stat .l { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .axis-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
+  .axis-list li { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.9rem; }
+  .axis-list b { color: var(--accent-text); }
+  .jumplist { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0 1.6rem; padding: 0; list-style: none; }
+  .jumplist a {
+    display: inline-block; border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.3rem 0.85rem; font-size: 0.85rem; text-decoration: none; color: var(--text);
+    background: var(--surface);
+  }
+  .jumplist a:hover { border-color: var(--accent); color: var(--accent-text); }
+  article.idea {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 1.3rem 1.5rem 1.5rem; margin-bottom: 1.4rem; scroll-margin-top: 1rem;
+  }
+  .idea-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .rank-chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-text); font-weight: 700;
+    border-radius: 999px; width: 1.9rem; height: 1.9rem; font-size: 0.95rem; flex: none;
+  }
+  .idea-head h3 { margin: 0; flex: 1 1 auto; }
+  .pillrow { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0 0.9rem; }
+  .pill {
+    border-radius: 999px; padding: 0.22rem 0.7rem; font-size: 0.78rem; font-weight: 600;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  }
+  .pill.axis { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
+  .pill.conf-high { background: var(--good-soft); color: var(--good); border-color: transparent; }
+  .pill.conf-medium { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .pill.complexity { background: var(--surface-2); color: var(--text-muted); }
+  dl.fields { margin: 0.9rem 0; display: grid; gap: 0.7rem; }
+  dl.fields dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 700; margin-bottom: 0.15rem; }
+  dl.fields dd { margin: 0; }
+  .basis-tag { font-family: var(--font-mono); font-size: 0.78em; color: var(--accent-text); }
+  .callout {
+    border-radius: 10px; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.94rem;
+    background: var(--warn-soft); border: 1px solid transparent;
+  }
+  .callout .eyebrow { color: var(--warn); }
+  .diagram-wrap { margin: 1rem 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; }
+  .diagram-wrap svg { width: 100%; height: auto; display: block; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+  footer.composition-signal {
+    margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border);
+    font-size: 0.8rem; color: var(--text-muted);
+  }
+</style>
+
+<div class="page">
+  <span class="eyebrow">Ideation</span>
+  <h1>Live game data &rarr; Anno 117 Calculator</h1>
+  <p class="lede">How data read from the game via this pipe project should be delivered into <code>../anno-117-calculator</code> &mdash; transport/packaging architecture and how the pipe's fields resolve into the calculator's data model.</p>
+  <div class="meta">
+    <span><b>Date</b> 2026-08-10</span>
+    <span><b>Topic</b> calculator-integration</span>
+    <span><b>Focus</b> live data delivery architecture (user's own idea &mdash; Tauri bundle + serving exe &mdash; evaluated as one option)</span>
+    <span><b>Mode</b> repo-grounded</span>
+  </div>
+
+  <div class="stats-strip">
+    <div class="stat"><div class="n">46</div><div class="l">raw ideas</div></div>
+    <div class="stat"><div class="n">5</div><div class="l">ideation frames</div></div>
+    <div class="stat"><div class="n">5</div><div class="l">topic axes</div></div>
+    <div class="stat"><div class="n">7</div><div class="l">survivors</div></div>
+  </div>
+
+  <h2 id="grounding">Codebase Context</h2>
+  <p><b>anno-117-pipe</b> (this repo, C++20, Windows-only, branch <code>mvp-calculator-bridge</code>) reads the game's live production statistics over a Windows named pipe (<code>\\.\pipe\anno117</code>), client-only, and today only renders them in an ImGui/Direct3D12 window &mdash; nothing is exposed outside the process. Its <code>AreaProductionStatistics</code> messages carry, per area and per <code>ProductGuid</code>: live and theoretical-max generation/consumption rates, a building count (<code>AmountOfBuildings</code>), upkeep/income/profit (in-game currency), and productivity sums. The pipe reconnects automatically across game restarts. The project just adopted CMake + vcpkg (manifest mode, vendored submodule) + Visual Studio 2022, with zero dependencies declared so far &mdash; this integration is the explicit next stage.</p>
+  <p><b>../anno-117-calculator</b> is a separate, real, actively-maintained community tool (TypeScript + Knockout.js, static webpack site, MIT-licensed, public releases, its own Discord and donations &mdash; not a prototype). It has no server and no existing live-data channel. Game GUIDs (the same space as this pipe's <code>ProductGuid</code>) are baked into its bundle by a sibling <code>asset-extractor</code> tool. Its writable state lives at <code>Factory.buildings.constructed</code> (a Knockout observable &mdash; exactly what a user types in today); a <code>Product</code> can have <em>multiple</em> factories, so the pipe's per-product aggregates don't always resolve to one factory. The only existing "data in" path dumps/restores all of <code>localStorage</code> via a file picker and reloads the page &mdash; unusable for a live, ticking feed.</p>
+  <p>Public web research (general Anno 117 game mechanics only &mdash; neither project repo was searched) confirmed the in-game Statistics screen already plots production/consumption as <em>rates</em> over time, matching this pipe's field shapes, and that the game's buff/attribute system is the same one the calculator already models.</p>
+
+  <h2 id="axes">Topic Axes</h2>
+  <ul class="axis-list">
+    <li><b>1. Transport / IPC mechanism</b> &mdash; how the pipe-reading process and the calculator's webview/browser talk to each other</li>
+    <li><b>2. Process &amp; packaging topology</b> &mdash; one bundled app vs. two cooperating processes vs. browser extension vs. headless service</li>
+    <li><b>3. Data-model mapping &amp; write semantics</b> &mdash; resolving product-level pipe aggregates onto per-factory calculator state; read-only overlay vs. direct write; the multi-factory-per-product ambiguity</li>
+    <li><b>4. Distribution &amp; update lifecycle</b> &mdash; how a native companion interacts with the calculator's existing static-site/GitHub-release distribution and its real user base</li>
+    <li><b>5. Trust, safety &amp; non-invasiveness</b> &mdash; this is explicitly an unofficial/experimental game feature; local-only, no elevated privileges, no resemblance to memory-injection/cheat tooling</li>
+  </ul>
+
+  <h2 id="verdict-tauri">On the user's own idea (Tauri bundle + serving .exe)</h2>
+  <p>Evaluated, not rejected. Four independent ideation frames converged on a lighter variant of the same instinct: skip Tauri's Rust/webview toolchain and have the existing C++ app serve the calculator's already-built static files plus a live data feed from one small embedded HTTP server (survivor #1). That gets the same "one exe to double-click" outcome the Tauri idea is reaching for, without adding a second language/build toolchain to a project that just deliberately started clean with CMake + vcpkg and zero dependencies. Tauri remains a legitimate <em>later</em> choice &mdash; e.g. as a nicer packaging/UI shell wrapped around the same local-server core &mdash; but isn't necessary to reach the goal for v1.</p>
+
+  <h2 id="ideas">Ranked Ideas</h2>
+  <ul class="jumplist">
+    <li><a href="#idea-1">1. Local server, no Tauri</a></li>
+    <li><a href="#idea-2">2. Read-only first, never auto-write</a></li>
+    <li><a href="#idea-3">3. GUID-blind native layer</a></li>
+    <li><a href="#idea-4">4. Versioned wire contract</a></li>
+    <li><a href="#idea-5">5. Loopback + consent by default</a></li>
+    <li><a href="#idea-6">6. Ship a non-live snapshot MVP first</a></li>
+    <li><a href="#idea-7">7. Independent product identity</a></li>
+  </ul>
+
+  <article class="idea" id="idea-1">
+    <div class="idea-head"><span class="rank-chip">1</span><h3>Local server embedded in the existing C++ app &mdash; no Tauri required</h3></div>
+    <div class="pillrow">
+      <span class="pill axis">Axis 2 &middot; Process &amp; packaging topology</span>
+      <span class="pill conf-high">Confidence: High</span>
+      <span class="pill complexity">Complexity: Medium</span>
+    </div>
+    <dl class="fields">
+      <dt>Description</dt>
+      <dd>The pipe-reading exe grows a tiny embedded HTTP server (e.g. cpp-httplib) that serves the calculator's own already-built <code>dist/</code> output on <code>http://localhost:PORT</code> and pushes live snapshots alongside it (SSE or WebSocket, same-origin). One process, one download, zero new language/toolchain &mdash; the project is already C++/CMake/vcpkg. The calculator itself needs no code changes to keep working for everyone who never runs the companion; it's purely additive.</dd>
+      <dt>Basis</dt>
+      <dd><span class="basis-tag">direct:</span> the calculator is "a static, webpack-bundled site (<code>npm run build</code> -&gt; <code>dist/</code>). No server, no IPC" and is MIT-licensed &mdash; a static folder is trivially servable. <code>vcpkg.json</code> "currently has zero dependencies," so this is the cheapest moment to pick the serving model before anything else is built against a different assumption. <span class="basis-tag">reasoned:</span> serving same-origin over plain <code>http://localhost</code> also sidesteps the mixed-content/<code>wss</code> problems a <code>ws://localhost</code> connection from the real <code>https://anno-mods.github.io</code> deployment would hit.</dd>
+      <dt>Rationale</dt>
+      <dd>This idea converged independently across four of the five ideation frames (leverage, cross-domain analogy, and both assumption-breaking/constraint-flipping passes) &mdash; the strongest agreement signal in the whole run. It directly answers the Tauri question with a lighter equivalent that reuses tooling already in place.</dd>
+      <dt>Downsides</dt>
+      <dd>Still a new native dependency (an HTTP library) and a listening socket, which can trigger a first-run Windows Firewall prompt &mdash; mitigate via loopback-only binding (survivor #5). A leaner fallback exists if a server proves too heavy: write snapshots to a file and poll/read them (no socket at all), at the cost of higher latency and, for browser-side reads, a repeated file-access permission grant.</dd>
+      <dt>Confidence</dt>
+      <dd>High &mdash; 4 of 5 independent ideation frames reached a form of this idea without prompting each other.</dd>
+      <dt>Complexity</dt>
+      <dd>Medium &mdash; one new vcpkg dependency, a small HTTP/SSE server, and static-file serving; no new language or build system.</dd>
+    </dl>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 760 190" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture: game to pipe app to browser">
+        <defs>
+          <marker id="arrow1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="currentColor"></path>
+          </marker>
+        </defs>
+        <g font-family="ui-monospace, monospace" font-size="12">
+          <rect x="10" y="70" width="150" height="50" rx="8" fill="none" stroke="currentColor"></rect>
+          <text x="85" y="100" text-anchor="middle">Anno 117 (game)</text>
+
+          <rect x="230" y="30" width="230" height="130" rx="10" fill="none" stroke="currentColor" stroke-dasharray="4 3"></rect>
+          <text x="345" y="20" text-anchor="middle" font-size="11">anno-117-pipe.exe</text>
+          <rect x="250" y="55" width="190" height="40" rx="8" fill="none" stroke="currentColor"></rect>
+          <text x="345" y="79" text-anchor="middle">Named-pipe reader</text>
+          <rect x="250" y="115" width="190" height="40" rx="8" fill="none" stroke="currentColor"></rect>
+          <text x="345" y="139" text-anchor="middle">Local HTTP + SSE server</text>
+
+          <rect x="600" y="70" width="150" height="50" rx="8" fill="none" stroke="currentColor"></rect>
+          <text x="675" y="93" text-anchor="middle">Browser</text>
+          <text x="675" y="108" text-anchor="middle" font-size="10">calculator dist/</text>
+
+          <line x1="160" y1="95" x2="248" y2="75" stroke="currentColor" marker-end="url(#arrow1)"></line>
+          <text x="200" y="70" text-anchor="middle" font-size="10">named pipe</text>
+
+          <line x1="345" y1="95" x2="345" y2="113" stroke="currentColor" marker-end="url(#arrow1)"></line>
+
+          <line x1="440" y1="135" x2="598" y2="100" stroke="currentColor" marker-end="url(#arrow1)"></line>
+          <text x="530" y="105" text-anchor="middle" font-size="10">localhost:PORT</text>
+        </g>
+      </svg>
+    </div>
+  </article>
+
+  <article class="idea" id="idea-2">
+    <div class="idea-head"><span class="rank-chip">2</span><h3>Read-only comparison overlay first &mdash; never auto-write to <code>buildings.constructed</code></h3></div>
+    <div class="pillrow">
+      <span class="pill axis">Axis 3 &middot; Data-model mapping &amp; write semantics</span>
+      <span class="pill conf-high">Confidence: High</span>
+      <span class="pill complexity">Complexity: Low</span>
+    </div>
+    <dl class="fields">
+      <dt>Description</dt>
+      <dd>Resolve pipe fields into a visually distinct, read-only "ghost" overlay next to the calculator's existing numbers &mdash; comparing the pipe's live <code>ProductGeneration</code>/<code>ProductConsumption</code> against the calculator's own <code>totalCurrentProduction</code>/<code>totalDemand</code> computed values. Never call <code>factory.buildings.constructed(n)</code> automatically. Editing stays 100% manual.</dd>
+      <dt>Basis</dt>
+      <dd><span class="basis-tag">direct:</span> <code>Factory.buildings.constructed</code> is "exactly what a user types into the UI today" &mdash; a planning input, not a current-state field &mdash; and "a product can be produced by more than one factory type/tier, so the pipe's per-product aggregate... doesn't always map 1:1 to a single calculator Factory object." <span class="basis-tag">reasoned:</span> a planning tool's value is exploring hypotheticals different from current reality; auto-writing collapses "what I have" and "what I'm planning" into one field, silently overwriting a user's scenario the next time the pipe ticks.</dd>
+      <dt>Rationale</dt>
+      <dd>This is the single strongest convergence in the entire run &mdash; a version of it was independently proposed by all five ideation frames. It also removes the hardest unsolved problem (multi-factory disambiguation) from the critical path entirely, since <code>Product</code>-level computed values are already summed across every factory tier and need no per-factory resolution.</dd>
+      <dt>Downsides</dt>
+      <dd>Users who specifically want "auto-sync my building counts" don't get it in v1; that has to be a deliberate, later, opt-in feature (see the algebraic-solve fallback in the rejection summary) if ever built at all.</dd>
+      <dt>Confidence</dt>
+      <dd>High &mdash; unanimous across every ideation frame; treat as close to a settled constraint rather than a debatable option.</dd>
+      <dt>Complexity</dt>
+      <dd>Low &mdash; it's a scope decision more than an engineering task, and it's the cheapest possible choice to make explicitly now versus discovering the problem after shipping writes.</dd>
+    </dl>
+  </article>
+
+  <article class="idea" id="idea-3">
+    <div class="idea-head"><span class="rank-chip">3</span><h3>Keep the native layer GUID-blind &mdash; all mapping logic lives in the calculator's own TypeScript</h3></div>
+    <div class="pillrow">
+      <span class="pill axis">Axis 3 &middot; Data-model mapping &amp; write semantics</span>
+      <span class="pill conf-high">Confidence: High</span>
+      <span class="pill complexity">Complexity: Low&ndash;Medium</span>
+    </div>
+    <dl class="fields">
+      <dt>Description</dt>
+      <dd>The C++ side never resolves <code>ProductGuid</code> to a <code>Factory</code> or reasons about the game's asset graph at all &mdash; it forwards <code>ProductionEntryData</code> fields verbatim. All GUID &rarr; Asset &rarr; Product &rarr; Factory resolution reuses the calculator's own <code>assetsMap</code>, which <code>asset-extractor</code> already bakes into <code>js/params.js</code> at build time.</dd>
+      <dt>Basis</dt>
+      <dd><span class="basis-tag">direct:</span> "Game asset data is baked into <code>js/params.js</code> at build time by a separate sibling tool (<code>../asset-extractor</code>) &mdash; shares the same numeric GUID space as this pipe's <code>ProductGuid</code>," and "Per-island <code>assetsMap: Map&lt;guid, Asset&gt;</code> holds Factories/Products/Buffs etc., keyed by the game's own GUIDs."</dd>
+      <dt>Rationale</dt>
+      <dd>Removes an entire category of future bugs (a hand-maintained GUID table drifting out of sync across two languages and two repos as the game updates) by not building one at all &mdash; the mapping is already generated, for free, every time <code>asset-extractor</code> runs. It also keeps the native binary's contract stable (see survivor #4), since it never has to be rebuilt when the calculator's domain model changes.</dd>
+      <dt>Downsides</dt>
+      <dd>Means the native side can't do anything "smart" with the data on its own (e.g. its own ImGui overlay would also need the mapping if it ever wanted factory-level detail) &mdash; an acceptable trade given the ImGui viewer's job is graphing raw trends, not domain reasoning.</dd>
+      <dt>Confidence</dt>
+      <dd>High &mdash; proposed independently by two frames and directly supported by the existing asset-extractor/GUID-sharing pattern already in place between the two repos.</dd>
+      <dt>Complexity</dt>
+      <dd>Low&ndash;Medium &mdash; mostly a discipline/scope constraint on the native side; the actual mapping code is new work regardless of where it lives.</dd>
+    </dl>
+  </article>
+
+  <article class="idea" id="idea-4">
+    <div class="idea-head"><span class="rank-chip">4</span><h3>Explicit versioned wire contract, decoupled from both repos' release cadences</h3></div>
+    <div class="pillrow">
+      <span class="pill axis">Axis 4 &middot; Distribution &amp; update lifecycle</span>
+      <span class="pill conf-high">Confidence: High</span>
+      <span class="pill complexity">Complexity: Low</span>
+    </div>
+    <dl class="fields">
+      <dt>Description</dt>
+      <dd>Define the bridge's JSON payload as a small, explicit, versioned schema with a capability/version handshake on connect (mirroring the pipe protocol's own existing <code>Version</code> message pattern one layer down). A version mismatch degrades gracefully ("live features disabled") instead of breaking silently.</dd>
+      <dt>Basis</dt>
+      <dd><span class="basis-tag">direct:</span> the pipe protocol already has a dedicated <code>Version</code> message type as one of its four message kinds &mdash; the project has already solved "how do two independently-evolving processes agree on protocol shape" once, for the game&harr;bridge link. <span class="basis-tag">reasoned:</span> the calculator deploys continuously as a static site on its own cadence, entirely outside this repo's control, while the native binary updates far less often (a download, potentially SmartScreen-flagged) &mdash; without negotiation, any calculator deploy risks silently breaking against whatever bridge version a user still has installed.</dd>
+      <dt>Rationale</dt>
+      <dd>Converged across three independent frames, including two different cross-domain analogies (SimConnect's variable registry, Stream Deck's independently-versioned plugin protocol) that both land on the same shape: two systems on different release schedules need an explicit contract, not an assumed one.</dd>
+      <dt>Downsides</dt>
+      <dd>A small amount of schema/versioning ceremony up front for a project that currently has none &mdash; worth it here because retrofitting version negotiation after users already depend on an implicit contract is much more expensive.</dd>
+      <dt>Confidence</dt>
+      <dd>High &mdash; three frames converged, and the pattern already exists one layer down in this same protocol.</dd>
+      <dt>Complexity</dt>
+      <dd>Low &mdash; a version field plus a capability check; cheap now, expensive to add later.</dd>
+    </dl>
+  </article>
+
+  <article class="idea" id="idea-5">
+    <div class="idea-head"><span class="rank-chip">5</span><h3>Loopback-only, explicit opt-in connection &mdash; treat trust as a first-class design decision</h3></div>
+    <div class="pillrow">
+      <span class="pill axis">Axis 5 &middot; Trust, safety &amp; non-invasiveness</span>
+      <span class="pill conf-high">Confidence: High</span>
+      <span class="pill complexity">Complexity: Low</span>
+    </div>
+    <dl class="fields">
+      <dt>Description</dt>
+      <dd>Bind the local server strictly to <code>127.0.0.1</code>, require an explicit user action in the calculator ("Connect to running game" &mdash; not silent auto-attach on page load) before any connection opens, and stop the moment the tab/connection closes. No auto-start-on-boot, no always-on background daemon.</dd>
+      <dt>Basis</dt>
+      <dd><span class="basis-tag">direct:</span> the README already "calls the pipe an unofficial/experimental 'easter egg' feature, 'not an official or supported API'" and the pipe app is "client-only (never writes back to the game)." <span class="basis-tag">reasoned:</span> a companion tool that opens a discoverable network port with no explicit consent step is one antivirus/Windows-Defender heuristic away from resembling the memory-injection/cheat-tool category this project explicitly wants no association with; an always-on background process reading a private game pipe reads very differently, trust-wise, than a tool the user explicitly invokes per session.</dd>
+      <dt>Rationale</dt>
+      <dd>Four frames converged on some version of this (loopback+ephemeral port+pairing token, an explicit consent handshake analogous to Discord RPC, an OS-level provably-read-only pipe handle, and an explicit user-initiated "Connect" action) &mdash; all pointing at the same underlying decision: default to the narrow, visible, user-initiated version of this feature, not the wide, silent one.</dd>
+      <dt>Downsides</dt>
+      <dd>Slightly more friction per session than "it just works automatically" &mdash; an acceptable, and probably necessary, cost for a tool this close to the trust-sensitive edge of game modding/tooling.</dd>
+      <dt>Confidence</dt>
+      <dd>High &mdash; four frames converged on the same underlying principle from different angles.</dd>
+      <dt>Complexity</dt>
+      <dd>Low &mdash; almost entirely default/configuration choices, not new engineering.</dd>
+    </dl>
+  </article>
+
+  <article class="idea" id="idea-6">
+    <div class="idea-head"><span class="rank-chip">6</span><h3>Ship a non-live, post-session snapshot MVP before building real-time streaming</h3></div>
+    <div class="pillrow">
+      <span class="pill axis">Axis 3 &middot; Data-model mapping &amp; write semantics</span>
+      <span class="pill conf-medium">Confidence: Medium</span>
+      <span class="pill complexity">Complexity: Low</span>
+    </div>
+    <dl class="fields">
+      <dt>Description</dt>
+      <dd>Challenge the assumption that data must flow while the game is running. For v1, have the pipe app periodically write a small JSON snapshot (session stats, not full <code>localStorage</code>) to disk; extend the calculator's existing file-picker import flow to merge that snapshot into the relevant per-island observables without the current full <code>location.reload()</code>. Playing and analyzing become sequential, not simultaneous &mdash; no live channel, no server, needed at all for this scope.</dd>
+      <dt>Basis</dt>
+      <dd><span class="basis-tag">direct:</span> the calculator's only existing "get data in" path today &mdash; <code>installImportConfigListener()</code>/<code>exportConfig()</code> &mdash; is exactly this shape (file in, merge, minus the full-reload problem), and the grounding explicitly notes that mechanism is "not remotely suited to a live, ticking data feed... a reload per pipe update would nuke UI state" &mdash; a critique that applies only if the goal is <em>live</em>, not to a deliberate one-time post-session import.</dd>
+      <dt>Rationale</dt>
+      <dd>This is the one idea in the survivor set that reduces scope rather than architecture &mdash; it directly interrogates "live" as an assumption the user's framing carried in by default, and offers a legitimately much cheaper de-risking step: prove the GUID mapping and the overlay UX work at all, before building any transport, discovery, or trust-boundary machinery.</dd>
+      <dt>Downsides</dt>
+      <dd>Doesn't deliver the "watch it update while I play" experience the user is presumably actually after &mdash; it's a deliberate v1/v2 split, not a replacement for survivors #1, #4, #5 if live data is the real goal.</dd>
+      <dt>Confidence</dt>
+      <dd>Medium &mdash; grounded in existing code (the import mechanism genuinely supports this shape) but it's a scope call, not a technical necessity, so its value depends on how much the team actually wants "live" for v1.</dd>
+      <dt>Complexity</dt>
+      <dd>Low &mdash; reuses an existing mechanism almost as-is.</dd>
+    </dl>
+  </article>
+
+  <article class="idea" id="idea-7">
+    <div class="idea-head"><span class="rank-chip">7</span><h3>Ship the companion as its own independently-versioned product, never gating the calculator's release</h3></div>
+    <div class="pillrow">
+      <span class="pill axis">Axis 4 &middot; Distribution &amp; update lifecycle</span>
+      <span class="pill conf-medium">Confidence: Medium</span>
+      <span class="pill complexity">Complexity: Low</span>
+    </div>
+    <dl class="fields">
+      <dt>Description</dt>
+      <dd>Publish the native companion from this repo's own releases, named and versioned independently (e.g. "Anno 117 Live Data Bridge"), explicitly for the subset of users who also want live stats &mdash; never bundled into or required by the calculator's mainline distribution.</dd>
+      <dt>Basis</dt>
+      <dd><span class="basis-tag">direct:</span> the calculator is "a real, actively maintained community tool by the same author with a Discord and PayPal donations" &mdash; a real reputation and userbase to protect &mdash; and the two repos are already organizationally separate, with this repo already standing up its own independent build (CMake + vcpkg). <span class="basis-tag">reasoned:</span> an unsigned, niche companion exe (see the SmartScreen "unrecognized publisher" friction any new native binary hits) is exactly the kind of release risk that should not ride on the calculator's existing reputation with its real user base.</dd>
+      <dt>Rationale</dt>
+      <dd>Keeps the calculator's frictionless "just open a URL" path completely untouched for the ~majority of users who never want live data, while still giving the feature a real, discoverable home. Also sets up a clean path to "support other Anno calculators or mods" later, since the bridge isn't calculator-specific by construction.</dd>
+      <dt>Downsides</dt>
+      <dd>Two release processes to maintain instead of one; discoverability of the companion depends on the calculator surfacing it (a link, a settings-panel mention) rather than it being bundled by default.</dd>
+      <dt>Confidence</dt>
+      <dd>Medium &mdash; directionally well-supported, but the actual distribution mechanics (where the download link lives, how discovery works) weren't scoped by this ideation pass.</dd>
+      <dt>Complexity</dt>
+      <dd>Low &mdash; primarily a naming/repo-layout/release-process decision, not new code.</dd>
+    </dl>
+  </article>
+
+  <h2 id="rejected">Rejection Summary</h2>
+  <table>
+    <thead><tr><th>#</th><th>Idea</th><th>Reason rejected / folded in</th></tr></thead>
+    <tbody>
+      <tr><td>R1</td><td>Mixed-content wall as a standalone finding</td><td>Restates a real risk but is a design constraint, not a direction &mdash; folded into survivor #1 as an implementation consideration.</td></tr>
+      <tr><td>R2</td><td>File System Access API polling (no server at all)</td><td>Legitimate minimal alternative, but weaker than the four-frame convergence on a local server (#1) and requires a repeated per-session file-grant gesture from the user.</td></tr>
+      <tr><td>R3</td><td>"Reload-based import is incompatible with live" as its own idea</td><td>Restates a grounding fact rather than proposing a direction; the constraint is captured in survivor #2's and #6's rationale.</td></tr>
+      <tr><td>R4</td><td>TotalMaintenance/TotalIncome/TotalProfit have no calculator home</td><td>Valid scoping caveat, folded into survivor #2/#3: display these read-only, do not force-fit them into the domain model.</td></tr>
+      <tr><td>R5</td><td>"Don't rebuild the ImGui viewer's charts in the calculator"</td><td>Sound scoping advice but too narrow/tactical to stand as its own architectural direction; kept as an implementation note.</td></tr>
+      <tr><td>R6</td><td>Unsigned-exe SmartScreen adoption cliff, as a standalone idea</td><td>Real risk, folded into survivor #7's rationale for keeping the companion optional and separately released.</td></tr>
+      <tr><td>R7</td><td>Auto-derived per-factory allocation via algebraic solve</td><td>Clever fallback, but only relevant if the team later rejects survivor #2's (near-unanimous) read-only default &mdash; kept as a footnote, not a primary direction.</td></tr>
+      <tr><td>R8</td><td>Per-channel subscribe/unsubscribe protocol (market-data style)</td><td>Solves a scaling problem (many concurrent subscribers, many products) this single-user desktop tool doesn't have evidence of yet &mdash; premature for v1.</td></tr>
+      <tr><td>R9</td><td>SimConnect-style variable registry, as a separate idea from #4</td><td>Substantially the same recommendation as survivor #4's versioned contract; merged rather than duplicated.</td></tr>
+      <tr><td>R10</td><td>Chromecast-style presence discovery</td><td>Valuable UX detail (auto-detect whether the bridge is running) but an implementation detail of survivor #1/#5, not its own architectural direction.</td></tr>
+      <tr><td>R11</td><td>"Live mode as a second static page" (A1)</td><td>Folded into survivor #1's rationale &mdash; the calculator itself stays static and untouched; the live feature is additive.</td></tr>
+      <tr><td>R12</td><td>No-install portable exe that just opens the public URL (A3)</td><td>A lighter sub-variant of survivor #1 (open the public site instead of self-hosting it) &mdash; noted as an implementation option under #1, not a separate direction.</td></tr>
+      <tr><td>R13</td><td>Browser native-messaging host / extension bridge</td><td>A genuinely distinct third topology (zero calculator-source changes, browser-mediated process lifecycle) &mdash; worth revisiting as a Plan B if the calculator maintainer prefers nothing be self-hosted, but survivor #1 is simpler to build and debug first and avoids distributing a second artifact (a browser extension) alongside the native exe.</td></tr>
+      <tr><td>R14</td><td>Port calculator math into the ImGui viewer (no browser at all, B1)</td><td>Directly contradicts the strongly-converged "don't duplicate calculator domain logic in C++" leverage argument (survivor #3) &mdash; recreates the calculator instead of reusing it.</td></tr>
+      <tr><td>R15</td><td>Broadcast to N concurrent viewers (pub/sub hub, B2)</td><td>Sound implementation detail of survivor #1 (broadcast is nearly free given the existing single-canonical-state design) &mdash; not a standalone direction.</td></tr>
+      <tr><td>R16</td><td>Userscript that simulates keystrokes into the calculator's DOM (B3)</td><td>Fragile against any calculator UI change and reintroduces the auto-write risk the group otherwise converged on avoiding (survivor #2) &mdash; rejected as higher-risk than the local-server + explicit-overlay approaches.</td></tr>
+      <tr><td>R17</td><td>File-write + polling with zero server/dependency (B6)</td><td>A genuine, leaner fallback to survivor #1 rather than a rejected idea outright &mdash; captured as the explicit fallback path in survivor #1's downsides.</td></tr>
+      <tr><td>R18</td><td>Embed the calculator inside the pipe app's window via WebView2 (A6)</td><td>Reintroduces the same bundling cost as the user's original Tauri idea (a full webview engine) without Tauri's cross-platform benefit, and works against survivor #7's "keep the calculator's independent identity" &mdash; not clearly better than survivor #1's plain HTTP-server approach.</td></tr>
+    </tbody>
+  </table>
+
+  <footer class="composition-signal">Composed 2026-08-10 by ce-ideate, orchestrated in Claude Code from direct source reads of <code>anno-117-pipe</code> (this repo) and <code>../anno-117-calculator</code>, plus general public web research on Anno 117 game mechanics (Steam Community, Anno Union DevBlog) &mdash; no search of either project repo was performed.</footer>
+</div>
